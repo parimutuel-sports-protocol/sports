@@ -1,14 +1,22 @@
 [features]
 seeds = false
 skip-lint = false
+
 [programs.localnet]
 parimutuel_sports = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+[programs.devnet]
+parimutuel_sports = "BvnkwA2K3R41Hex1M56ck5BQktu7RBKLaEFqitiLNDHU"
+[[testnet.validator.clone]]
+address="GvDMxPzN1sCj7L26YDK2HnMRXEQmQ2aemov8YBtPS7vR" # sbv2 SOL/USD Feed
+[[testnet.validator.clone]]
+address="GZkZoR3tRcEWfqkvXk2A6XQHpS2etN8rkD3NeP5VaRVe" # sbv2 Sports Feed
+
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
