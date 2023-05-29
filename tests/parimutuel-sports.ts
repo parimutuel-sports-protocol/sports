@@ -29,8 +29,6 @@ describe("parimutuel-sports", () => {
   let aliceTokenAccount: any; // alice Token account
 
   let initialMintAmount = 100000000;
-  const stakeAmount = 4000;
-  const maxAmountPerApplication = 10000;
 
   if (provider.connection.rpcEndpoint == "http://localhost:8899") {
     alice = anchor.web3.Keypair.generate(); // HR
@@ -209,6 +207,7 @@ describe("parimutuel-sports", () => {
 
   const gameId = uuidv4();
   const outcomes = ["HOME", "AWAY"];
+  const results = [new anchor.BN(90000), new anchor.BN(1)]
   const feedKey = new PublicKey("GZkZoR3tRcEWfqkvXk2A6XQHpS2etN8rkD3NeP5VaRVe");
 
   it("create market", async () => {
@@ -234,7 +233,7 @@ describe("parimutuel-sports", () => {
 
     const expiryTime = Date.now() + 1000000;
     const tx = await program.methods
-      .createMarket(gameId, feedKey, outcomes, new anchor.BN(expiryTime), 10)
+      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 10)
       .accounts({
         creator: alice.publicKey,
         marketState: marketStatePDA,
@@ -304,6 +303,63 @@ describe("parimutuel-sports", () => {
       console.log("THis is tx for bet", tx);
     } catch (error) {
       console.log("this is error", error);
+    }
+    
+
+  });
+
+  it("settle", async () => {
+    const [marketStatePDA, marketStateBump] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("market_state"),
+          Buffer.from(gameId.substring(0, 18)),
+          Buffer.from(gameId.substring(18, 36)),
+        ],
+        program.programId
+      );
+
+    const [marketPoolPDA, marketPoolBump] =
+      anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("market_wallet"),
+          Buffer.from(gameId.substring(0, 18)),
+          Buffer.from(gameId.substring(18, 36)),
+        ],
+        program.programId
+      );
+    
+    const [userStatePDA, userStateBump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_state"),
+        Buffer.from(gameId.substring(0, 18)),
+        Buffer.from(gameId.substring(18, 36)),
+        alice.publicKey.toBuffer()
+      ],
+      program.programId
+    )
+
+    const outcome = "HOME";
+    const betAmount = 10000;
+    try {
+      const tx = await program.methods
+      .settle(gameId, marketStateBump)
+      .accounts({
+        bettor: alice.publicKey,
+        bettorTokenAccount: aliceTokenAccount,
+        marketState: marketStatePDA,
+        userBetState: userStatePDA,
+        tokenMint: USDCMint,
+        marketWallet: marketPoolPDA,
+        switchboardAggregator: feedKey,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([alice])
+      .rpc();
+      console.log("THis is tx for settle", tx);
+    } catch (error) {
+      console.log("this is error for settle", error);
     }
     
 
