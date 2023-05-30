@@ -177,6 +177,7 @@ describe("parimutuel-sports", () => {
       );
 
       aliceTokenAccount = TempAliceTokenAccount.address;
+      console.log("this is alice token account", aliceTokenAccount.toBase58());
 
       const _aliceTokenAccountBefore = await spl.getAccount(
         provider.connection,
@@ -209,6 +210,7 @@ describe("parimutuel-sports", () => {
   const outcomes = ["HOME", "AWAY"];
   const results = [new anchor.BN(90000), new anchor.BN(1)]
   const feedKey = new PublicKey("GZkZoR3tRcEWfqkvXk2A6XQHpS2etN8rkD3NeP5VaRVe");
+  const initialMultiplier = 50;
 
   it("create market", async () => {
     const [marketStatePDA, marketStateBump] =
@@ -233,12 +235,13 @@ describe("parimutuel-sports", () => {
 
     const expiryTime = Date.now() + 1000000;
     const tx = await program.methods
-      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 10)
+      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 10, initialMultiplier)
       .accounts({
         creator: alice.publicKey,
         marketState: marketStatePDA,
         tokenMint: USDCMint,
         marketWallet: marketPoolPDA,
+        creatorTokenAccount: aliceTokenAccount,
         // switchboardAggregator: feedKey,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
@@ -351,6 +354,8 @@ describe("parimutuel-sports", () => {
         userBetState: userStatePDA,
         tokenMint: USDCMint,
         marketWallet: marketPoolPDA,
+        platformWallet: aliceTokenAccount,
+        creatorWallet: aliceTokenAccount,
         switchboardAggregator: feedKey,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
