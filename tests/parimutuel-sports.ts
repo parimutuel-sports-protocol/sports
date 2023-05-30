@@ -25,10 +25,12 @@ describe("parimutuel-sports", () => {
   let admin: anchor.web3.Keypair; // This is the authority which is responsible for creating job, application and changing state of application
 
   let USDCMint: anchor.web3.PublicKey; // token which would be staked
+  let bobTokenAccount: any; // bob token account
   let casTokenAccount: any; // cas token account
   let aliceTokenAccount: any; // alice Token account
+  let adminTokenAccount: any; // admin Token account
 
-  let initialMintAmount = 100000000;
+  let initialMintAmount = 100000000000;
 
   if (provider.connection.rpcEndpoint == "http://localhost:8899") {
     alice = anchor.web3.Keypair.generate(); // HR
@@ -149,11 +151,18 @@ describe("parimutuel-sports", () => {
       "4CpgQ2g3KojCEpLwUDVjzFNWoMbvUqqQodHMPjN6B71mRy7dCuwWxCW8F9zjUrxsYDJyDpu1cbiERc8bkFR41USt";
     const adminPrivate =
       "2HKjYz8yfQxxhRS5f17FRCx9kDp7ATF5R4esLnKA4VaUsMA5zquP5XkQmvv9J5ZUD6wAjD4iBPYXDzQDNZmQ1eki";
+    const bobPrivate =
+      "32xvprYYtFrmoUn9YnEVJ6GUyJ613Qs5abbKCr7gPj2wiCeksUGFRzgDsUEjCKP6WSkMzcBZfnhguMs8JkH4UMGP";
 
     alice = anchor.web3.Keypair.fromSecretKey(
       new Uint8Array(bs58.decode(alicePrivate))
     );
-    cas = anchor.web3.Keypair.generate();
+    bob = anchor.web3.Keypair.fromSecretKey(
+      new Uint8Array(bs58.decode(bobPrivate))
+    );
+    cas = anchor.web3.Keypair.fromSecretKey(
+      new Uint8Array(bs58.decode(casPrivate))
+    );
     admin = anchor.web3.Keypair.fromSecretKey(
       new Uint8Array(bs58.decode(adminPrivate))
     );
@@ -176,12 +185,50 @@ describe("parimutuel-sports", () => {
         false
       );
 
+      const TempBobTokenAccount = await spl.getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        bob,
+        USDCMint,
+        bob.publicKey,
+        false
+      );
+
+      const TempCasTokenAccount = await spl.getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        cas,
+        USDCMint,
+        cas.publicKey,
+        false
+      );
+
+      const TempAdminTokenAccount = await spl.getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        admin,
+        USDCMint,
+        admin.publicKey,
+        false
+      );
+
       aliceTokenAccount = TempAliceTokenAccount.address;
-      console.log("this is alice token account", aliceTokenAccount.toBase58());
+      bobTokenAccount = TempBobTokenAccount.address;
+      casTokenAccount = TempCasTokenAccount.address;
+      adminTokenAccount = TempAdminTokenAccount.address;
 
       const _aliceTokenAccountBefore = await spl.getAccount(
         provider.connection,
-        aliceTokenAccount 
+        aliceTokenAccount
+      );
+      const _bobTokenAccountBefore = await spl.getAccount(
+        provider.connection,
+        bobTokenAccount
+      );
+      const _casTokenAccountBefore = await spl.getAccount(
+        provider.connection,
+        casTokenAccount
+      );
+      const _adminTokenAccountBefore = await spl.getAccount(
+        provider.connection,
+        adminTokenAccount
       );
 
       await spl.mintTo(
@@ -194,48 +241,129 @@ describe("parimutuel-sports", () => {
         [admin]
       );
 
+      await spl.mintTo(
+        provider.connection,
+        bob,
+        USDCMint,
+        bobTokenAccount,
+        admin.publicKey,
+        initialMintAmount,
+        [admin]
+      );
+
+      await spl.mintTo(
+        provider.connection,
+        cas,
+        USDCMint,
+        casTokenAccount,
+        admin.publicKey,
+        initialMintAmount,
+        [admin]
+      );
+
+      await spl.mintTo(
+        provider.connection,
+        admin,
+        USDCMint,
+        adminTokenAccount,
+        admin.publicKey,
+        initialMintAmount,
+        [admin]
+      );
+
       const _aliceTokenAccountAfter = await spl.getAccount(
         provider.connection,
         aliceTokenAccount
+      );
+      const _bobTokenAccountAfter = await spl.getAccount(
+        provider.connection,
+        bobTokenAccount
+      );
+      const _casTokenAccountAfter = await spl.getAccount(
+        provider.connection,
+        casTokenAccount
+      );
+      const _adminTokenAccountAfter = await spl.getAccount(
+        provider.connection,
+        adminTokenAccount
       );
 
       assert.equal(
         initialMintAmount,
         _aliceTokenAccountAfter.amount - _aliceTokenAccountBefore.amount
       );
+      assert.equal(
+        initialMintAmount,
+        _bobTokenAccountAfter.amount - _bobTokenAccountBefore.amount
+      );
+      assert.equal(
+        initialMintAmount,
+        _casTokenAccountAfter.amount - _casTokenAccountBefore.amount
+      );
+      assert.equal(
+        initialMintAmount,
+        _adminTokenAccountAfter.amount - _adminTokenAccountBefore.amount
+      );
     });
   }
 
   const gameId = uuidv4();
   const outcomes = ["HOME", "AWAY"];
-  const results = [new anchor.BN(90000), new anchor.BN(1)]
+  const results = [new anchor.BN(90000), new anchor.BN(1)];
   const feedKey = new PublicKey("GZkZoR3tRcEWfqkvXk2A6XQHpS2etN8rkD3NeP5VaRVe");
   const initialMultiplier = 50;
+  const currentTime = Date.now()/1000
+  const futureTime = currentTime + 4000;
+  const expiryTime = currentTime + 10000;
+
+  const getMarketStatePDA = gameId => {
+    const [marketStatePDA, marketStateBump] =
+    anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("market_state"),
+        Buffer.from(gameId.substring(0, 18)),
+        Buffer.from(gameId.substring(18, 36)),
+      ],
+      program.programId
+    );
+    return {marketStatePDA, marketStateBump};
+  }
+
+  const getMarketPoolPDA = gameId => {
+    const [marketPoolPDA, marketPoolBump] =
+    anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("market_wallet"),
+        Buffer.from(gameId.substring(0, 18)),
+        Buffer.from(gameId.substring(18, 36)),
+      ],
+      program.programId
+    );
+    return {marketPoolPDA, marketPoolBump};
+  }
+
+  const getUserStatePDA = (gameId, userKey) => {
+    const [userStatePDA, userStateBump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_state"),
+        Buffer.from(gameId.substring(0, 18)),
+        Buffer.from(gameId.substring(18, 36)),
+        userKey.toBuffer()
+      ],
+      program.programId
+    )
+    return {userStatePDA, userStateBump};
+  }
 
   it("create market", async () => {
-    const [marketStatePDA, marketStateBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_state"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
+    
+    const {marketStatePDA, marketStateBump} = getMarketStatePDA(gameId);
+    const {marketPoolPDA, marketPoolBump} = getMarketPoolPDA(gameId);
 
-    const [marketPoolPDA, marketPoolBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_wallet"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
 
-    const expiryTime = Date.now() + 1000000;
+    
     const tx = await program.methods
-      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 10, initialMultiplier)
+      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 1, initialMultiplier)
       .accounts({
         creator: alice.publicKey,
         marketState: marketStatePDA,
@@ -254,104 +382,112 @@ describe("parimutuel-sports", () => {
   });
 
   it("bet", async () => {
-    const [marketStatePDA, marketStateBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_state"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
+    const {marketStatePDA, marketStateBump} = getMarketStatePDA(gameId);
+    const {marketPoolPDA, marketPoolBump} = getMarketPoolPDA(gameId);
 
-    const [marketPoolPDA, marketPoolBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_wallet"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
-    
-    const [userStatePDA, userStateBump] = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user_state"),
-        Buffer.from(gameId.substring(0, 18)),
-        Buffer.from(gameId.substring(18, 36)),
-        alice.publicKey.toBuffer()
-      ],
-      program.programId
-    )
+    const {userStatePDA: aliceStatePDA, userStateBump: aliceStateBump} = getUserStatePDA(gameId, alice.publicKey);
+    const {userStatePDA: bobStatePDA, userStateBump: bobStateBump} = getUserStatePDA(gameId, bob.publicKey);
+    const {userStatePDA: casStatePDA, userStateBump: casStateBump} = getUserStatePDA(gameId, cas.publicKey);
+    const {userStatePDA: adminStatePDA, userStateBump: adminStateBump} = getUserStatePDA(gameId, admin.publicKey);
 
-    const outcome = "HOME";
+
+    const homeOutcome = "HOME";
+    const awayOutcome = "AWAY";
     const betAmount = 10000;
     try {
-      const tx = await program.methods
-      .bet(gameId, marketStateBump, outcome, new anchor.BN(betAmount))
+      // Alice bets on AWAY
+      const aliceTx = await program.methods
+      .bet(gameId, marketStateBump, awayOutcome, new anchor.BN(betAmount), new anchor.BN(currentTime))
       .accounts({
         bettor: alice.publicKey,
         bettorTokenAccount: aliceTokenAccount,
         marketState: marketStatePDA,
-        userBetState: userStatePDA,
+        userBetState: aliceStatePDA,
         tokenMint: USDCMint,
         marketWallet: marketPoolPDA,
-        // switchboardAggregator: feedKey,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([alice])
       .rpc();
-      console.log("THis is tx for bet", tx);
+
+      // bob bets on HOME 
+      const bobTx = await program.methods
+      .bet(gameId, marketStateBump, homeOutcome, new anchor.BN(betAmount), new anchor.BN(futureTime))
+      .accounts({
+        bettor: bob.publicKey,
+        bettorTokenAccount: bobTokenAccount,
+        marketState: marketStatePDA,
+        userBetState: bobStatePDA,
+        tokenMint: USDCMint,
+        marketWallet: marketPoolPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([bob])
+      .rpc();
+
+      // Cas bets on HOME
+      const casTx = await program.methods
+      .bet(gameId, marketStateBump, homeOutcome, new anchor.BN(betAmount), new anchor.BN(currentTime))
+      .accounts({
+        bettor: cas.publicKey,
+        bettorTokenAccount: casTokenAccount,
+        marketState: marketStatePDA,
+        userBetState: casStatePDA,
+        tokenMint: USDCMint,
+        marketWallet: marketPoolPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([cas])
+      .rpc();
+
+      // Admin bets on Away
+      const adminTx = await program.methods
+      .bet(gameId, marketStateBump, awayOutcome, new anchor.BN(betAmount), new anchor.BN(futureTime))
+      .accounts({
+        bettor: admin.publicKey,
+        bettorTokenAccount: adminTokenAccount,
+        marketState: marketStatePDA,
+        userBetState: adminStatePDA,
+        tokenMint: USDCMint,
+        marketWallet: marketPoolPDA,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([admin])
+      .rpc();
+
+      // console.log("THis is tx for bet", tx);
     } catch (error) {
-      console.log("this is error", error);
+      console.log("this is error in bet", error);
     }
-    
 
   });
 
   it("settle", async () => {
-    const [marketStatePDA, marketStateBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_state"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
+    const {marketStatePDA, marketStateBump} = getMarketStatePDA(gameId);
+    const {marketPoolPDA, marketPoolBump} = getMarketPoolPDA(gameId);
 
-    const [marketPoolPDA, marketPoolBump] =
-      anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_wallet"),
-          Buffer.from(gameId.substring(0, 18)),
-          Buffer.from(gameId.substring(18, 36)),
-        ],
-        program.programId
-      );
-    
-    const [userStatePDA, userStateBump] = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user_state"),
-        Buffer.from(gameId.substring(0, 18)),
-        Buffer.from(gameId.substring(18, 36)),
-        alice.publicKey.toBuffer()
-      ],
-      program.programId
-    )
+    const {userStatePDA: bobStatePDA, userStateBump: bobStateBump} = getUserStatePDA(gameId, bob.publicKey);
+    const {userStatePDA: casStatePDA, userStateBump: casStateBump} = getUserStatePDA(gameId, cas.publicKey);
 
     const outcome = "HOME";
     const betAmount = 10000;
     try {
-      const tx = await program.methods
+      // Alice and Bob has won
+      const bobTx = await program.methods
       .settle(gameId, marketStateBump)
       .accounts({
-        bettor: alice.publicKey,
-        bettorTokenAccount: aliceTokenAccount,
+        bettor: bob.publicKey,
+        bettorTokenAccount: bobTokenAccount,
         marketState: marketStatePDA,
-        userBetState: userStatePDA,
+        userBetState: bobStatePDA,
         tokenMint: USDCMint,
         marketWallet: marketPoolPDA,
         platformWallet: aliceTokenAccount,
@@ -360,13 +496,34 @@ describe("parimutuel-sports", () => {
         tokenProgram: spl.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
-      .signers([alice])
+      .signers([bob])
       .rpc();
-      console.log("THis is tx for settle", tx);
+
+
+      console.log("This is tx for settle bob", bobTx);
+
+      const casTx = await program.methods
+      .settle(gameId, marketStateBump)
+      .accounts({
+        bettor: cas.publicKey,
+        bettorTokenAccount: casTokenAccount,
+        marketState: marketStatePDA,
+        userBetState: casStatePDA,
+        tokenMint: USDCMint,
+        marketWallet: marketPoolPDA,
+        platformWallet: aliceTokenAccount,
+        creatorWallet: aliceTokenAccount,
+        switchboardAggregator: feedKey,
+        tokenProgram: spl.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .signers([cas])
+      .rpc();
+
+      console.log("This is tx for settle alice", casTx);
     } catch (error) {
       console.log("this is error for settle", error);
     }
-    
 
   });
 });

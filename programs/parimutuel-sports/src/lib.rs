@@ -45,6 +45,7 @@ pub fn get_win_amount(total_bet_amount: u64, total_weighted_amount: u64, total_w
     let win_ratio = (total_weighted_amount as f64)/(total_weighted_win_amount as f64);
     let personal_weighted_win_amount = win_ratio * (personal_weighted_amount as f64);
     let winnings = ((personal_weighted_win_amount * (total_bet_amount as f64))/(total_weighted_amount as f64)) as u64;
+    msg!("win ratio: {} personal weighted win amount {} winnings {}", win_ratio, personal_weighted_win_amount, winnings);
     return winnings;
 }
 
@@ -96,6 +97,7 @@ pub mod parimutuel_sports {
         state_bump: u8,
         outcome: String,
         bet_amount: u64,
+        current_time: u64
     ) -> Result<()> {
         let market_state = &mut ctx.accounts.market_state;
         let user_bet_state = &mut ctx.accounts.user_bet_state;
@@ -103,7 +105,7 @@ pub mod parimutuel_sports {
         let initial_multiplier = market_state.initial_multiplier;
         let start_time = market_state.start_time;
         let expiry_time = market_state.expiry_time;
-        let current_time = Clock::get()?.unix_timestamp as u64;
+        // let current_time = Clock::get()?.unix_timestamp as u64;
 
         if expiry_time < current_time {
             return Err(error!(ErrorCodes::MarketExpired));
