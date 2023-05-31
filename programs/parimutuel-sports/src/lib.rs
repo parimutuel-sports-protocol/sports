@@ -127,19 +127,19 @@ pub mod parimutuel_sports {
         msg!("this is current multiplier {}", current_multiplier);
 
         // Multiplier testing scenarios
-        msg!("initial multipler: 20, initial hours: 46");
-        let mut multiplier = get_current_multiplier(20, 41, 46);
-        msg!("hours left: 41 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 36, 46);
-        msg!("hours left: 36 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 29, 46);
-        msg!("hours left: 29 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 20, 46);
-        msg!("hours left: 20 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 15, 46);
-        msg!("hours left: 15 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 5, 46);
-        msg!("hours left: 5 and multipler: {}", multiplier);
+        // msg!("initial multipler: 20, initial hours: 46");
+        // let mut multiplier = get_current_multiplier(20, 41, 46);
+        // msg!("hours left: 41 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 36, 46);
+        // msg!("hours left: 36 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 29, 46);
+        // msg!("hours left: 29 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 20, 46);
+        // msg!("hours left: 20 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 15, 46);
+        // msg!("hours left: 15 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 5, 46);
+        // msg!("hours left: 5 and multipler: {}", multiplier);
 
         // Transfer the bet amount to the pool
 
