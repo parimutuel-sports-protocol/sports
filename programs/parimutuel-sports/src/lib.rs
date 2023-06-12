@@ -1,7 +1,10 @@
 use std::str::FromStr;
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount, Transfer};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{Mint, Token, TokenAccount, Transfer},
+};
 use switchboard_v2::AggregatorAccountData;
 
 declare_id!("BvnkwA2K3R41Hex1M56ck5BQktu7RBKLaEFqitiLNDHU");
@@ -23,9 +26,17 @@ pub fn calculate_multipler(mut multiplier: u32, minutes: u32) -> (u32, u32) {
     return (iterations, multiplier_half_time);
 }
 
-pub fn get_current_multiplier(initial_multiplier: u32, minutes_left: u32, initial_minutes: u32) -> u32 {
+pub fn get_current_multiplier(
+    initial_multiplier: u32,
+    minutes_left: u32,
+    initial_minutes: u32,
+) -> u32 {
     let mut multiplier = initial_multiplier;
-    let (iterations, multiplier_half_time) = calculate_multipler(initial_multiplier, initial_minutes);
+    let (iterations, multiplier_half_time) =
+        calculate_multipler(initial_multiplier, initial_minutes);
+    if multiplier_half_time == 0 {
+        return multiplier;
+    }
     let pow = (initial_minutes - minutes_left) / multiplier_half_time;
     let mut i = 0;
     while i < pow {
@@ -37,15 +48,30 @@ pub fn get_current_multiplier(initial_multiplier: u32, minutes_left: u32, initia
 
 pub fn get_minutes(current_time: u64, expiry_time: u64) -> u32 {
     let diff = expiry_time - current_time;
-    let minutes = (diff / (60 )) as u32;
+    let minutes = (diff / (60)) as u32;
     return minutes;
 }
 
-pub fn get_win_amount(total_bet_amount: u64, total_weighted_amount: u64, total_weighted_win_amount: u64, personal_weighted_amount: u64) -> u64 {
-    let win_ratio = (total_weighted_amount as f64)/(total_weighted_win_amount as f64);
+pub fn get_linear_multiplier(initial_multiplier: f64, total_time: f64, time_left: f64) -> f64 {
+    let multiplier = (time_left / total_time) * initial_multiplier;
+    if multiplier < 1.0 {
+        return 1.0;
+    }
+    ((multiplier * 10.0).round())/10.0
+}
+
+pub fn get_win_amount(
+    total_winnable_amount: u64,
+    total_weighted_amount: u64,
+    total_weighted_win_amount: u64,
+    personal_weighted_amount: u64,
+    personal_bet_amount: u64,
+) -> u64 {
+    let win_ratio = (total_weighted_amount as f64) / (total_weighted_win_amount as f64);
     let personal_weighted_win_amount = win_ratio * (personal_weighted_amount as f64);
-    let winnings = ((personal_weighted_win_amount * (total_bet_amount as f64))/(total_weighted_amount as f64)) as u64;
-    msg!("win ratio: {} personal weighted win amount {} winnings {}", win_ratio, personal_weighted_win_amount, winnings);
+    let winnings = personal_bet_amount
+        + ((personal_weighted_win_amount * (total_winnable_amount as f64))
+            / (total_weighted_amount as f64)) as u64;
     return winnings;
 }
 
@@ -61,7 +87,7 @@ pub mod parimutuel_sports {
         expected_results: Vec<u64>,
         expiry_time: u64,
         creator_fees: u8,
-        initial_multiplier: u32
+        initial_multiplier: u32,
     ) -> Result<()> {
         let market_state = &mut ctx.accounts.market_state;
 
@@ -97,7 +123,7 @@ pub mod parimutuel_sports {
         state_bump: u8,
         outcome: String,
         bet_amount: u64,
-        current_time: u64
+        current_time: u64,
     ) -> Result<()> {
         let market_state = &mut ctx.accounts.market_state;
         let user_bet_state = &mut ctx.accounts.user_bet_state;
@@ -117,29 +143,48 @@ pub mod parimutuel_sports {
             return Err(error!(ErrorCodes::MarketExpired));
         }
 
-        let minutes_left = get_minutes(current_time, expiry_time);
-        let initial_minutes = get_minutes(start_time, expiry_time);
+        let time_left = expiry_time - current_time;
+        let total_time = expiry_time - start_time;
+        let linear_multiplier = get_linear_multiplier(
+            initial_multiplier as f64,
+            total_time as f64,
+            time_left as f64,
+        );
+        msg!("This is linear multiplier {}", linear_multiplier);
 
-        let current_multiplier =
-            get_current_multiplier(initial_multiplier, minutes_left, initial_minutes);
-        let weighted_bet_amount = (current_multiplier as u64) * bet_amount;
+        let weighted_bet_amount = (linear_multiplier * (bet_amount as f64)) as u64;
 
-        msg!("this is current multiplier {}", current_multiplier);
+        // // Multiplier testing scenarios
+        // msg!("initial multipler: 20, initial seconds: 46");
+        // let mut multiplier = get_current_multiplier(20, 41, 46);
+        // msg!("hours left: 41 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 36, 46);
+        // msg!("hours left: 36 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 29, 46);
+        // msg!("hours left: 29 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 20, 46);
+        // msg!("hours left: 20 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 15, 46);
+        // msg!("hours left: 15 and multipler: {}", multiplier);
+        // multiplier = get_current_multiplier(20, 5, 46);
+        // msg!("hours left: 5 and multipler: {}", multiplier);
 
         // Multiplier testing scenarios
-        msg!("initial multipler: 20, initial hours: 46");
-        let mut multiplier = get_current_multiplier(20, 41, 46);
-        msg!("hours left: 41 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 36, 46);
-        msg!("hours left: 36 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 29, 46);
-        msg!("hours left: 29 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 20, 46);
-        msg!("hours left: 20 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 15, 46);
-        msg!("hours left: 15 and multipler: {}", multiplier);
-        multiplier = get_current_multiplier(20, 5, 46);
-        msg!("hours left: 5 and multipler: {}", multiplier);
+        msg!("initial multipler: 8, initial seconds:  7000");
+        let mut multiplier = get_linear_multiplier(8.0, 7000.0, 6500.0);
+        msg!("hours left: 6500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 5500.0);
+        msg!("hours left: 5500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 4500.0);
+        msg!("hours left: 4500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 3500.0);
+        msg!("hours left: 3500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 2500.0);
+        msg!("hours left: 2500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 1500.0);
+        msg!("hours left: 1500 and multipler: {}", multiplier);
+        multiplier = get_linear_multiplier(8.0, 7000.0, 500.0);
+        msg!("hours left: 500 and multipler: {}", multiplier);
 
         // Transfer the bet amount to the pool
 
@@ -187,7 +232,7 @@ pub mod parimutuel_sports {
                 name: outcome,
                 expected_result: outcomes[outcome_index].expected_result,
                 bet: bet_amount,
-                weighted_bet_amount: weighted_bet_amount 
+                weighted_bet_amount: weighted_bet_amount,
             };
             bets.push(user_bet);
             user_bet_state.bets = bets;
@@ -197,14 +242,20 @@ pub mod parimutuel_sports {
             for i in 0..bets.len() {
                 if bets[i].name == outcome {
                     bet_index = i;
+                    break;
                 }
             }
+            msg!(
+                "this is bet index {} and outcome index {}",
+                bet_index,
+                outcome_index
+            );
             if bet_index == usize::MAX {
                 let user_bet = UserOutcome {
                     name: outcome,
                     expected_result: outcomes[outcome_index].expected_result,
                     bet: bet_amount,
-                    weighted_bet_amount 
+                    weighted_bet_amount,
                 };
                 bets.push(user_bet);
             } else {
@@ -341,8 +392,17 @@ pub mod parimutuel_sports {
             // let winnings =
             //     (user_bet_amount * total_pool) / outcomes[outcome_index].total_bet_amount;
             let total_weighted_win_amount = outcomes[outcome_index].total_weighted_bet_amount;
-            let user_weighted_bet_amount = user_bet_state.bets[user_bet_win_index].weighted_bet_amount;
-            let winnings = get_win_amount(total_pool, total_weighted_pool, total_weighted_win_amount, user_weighted_bet_amount);
+            let total_win_amount = outcomes[outcome_index].total_bet_amount;
+            let user_weighted_bet_amount =
+                user_bet_state.bets[user_bet_win_index].weighted_bet_amount;
+            let total_winnable_pool = total_pool - total_win_amount;
+            let winnings = get_win_amount(
+                total_winnable_pool,
+                total_weighted_pool,
+                total_weighted_win_amount,
+                user_weighted_bet_amount,
+                user_bet_amount,
+            );
             msg!(
                 "This is winnings {} {} {} {}",
                 winnings,
@@ -394,6 +454,7 @@ pub struct CreateMarket<'info> {
     // pub switchboard_aggregator: AccountLoader<'info, AggregatorAccountData>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -410,7 +471,7 @@ pub struct Bet<'info> {
     pub bettor_token_account: Account<'info, TokenAccount>,
     #[account(mut, seeds = [MARKET_STATE_SEED, game_id.as_bytes()[..18].as_ref(), game_id.as_bytes()[18..].as_ref()],bump)]
     pub market_state: Account<'info, Market>,
-    #[account(init, payer = bettor, seeds = [USER_STATE_SEED, game_id.as_bytes()[..18].as_ref(), game_id.as_bytes()[18..].as_ref(), bettor.key().as_ref()],bump, space = 48 + 8 + 8)]
+    #[account(init_if_needed, payer = bettor, seeds = [USER_STATE_SEED, game_id.as_bytes()[..18].as_ref(), game_id.as_bytes()[18..].as_ref(), bettor.key().as_ref()],bump, space = 500)]
     pub user_bet_state: Account<'info, UserBet>,
     pub token_mint: Account<'info, Mint>,
     #[account(mut, seeds = [MARKET_WALLET_SEED, game_id.as_bytes()[..18].as_ref(), game_id.as_bytes()[18..].as_ref()], bump)]
@@ -418,6 +479,7 @@ pub struct Bet<'info> {
     // pub switchboard_aggregator: AccountLoader<'info, AggregatorAccountData>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -445,6 +507,7 @@ pub struct Settle<'info> {
     pub platform_wallet: Box<Account<'info, TokenAccount>>,
     pub switchboard_aggregator: AccountLoader<'info, AggregatorAccountData>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>,
 }
 

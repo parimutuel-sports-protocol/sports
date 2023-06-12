@@ -308,12 +308,52 @@ describe("parimutuel-sports", () => {
   }
 
   const gameId = uuidv4();
-  const outcomes = ["HOME", "AWAY"];
-  const results = [new anchor.BN(90000), new anchor.BN(1)];
-  const feedKey = new PublicKey("GZkZoR3tRcEWfqkvXk2A6XQHpS2etN8rkD3NeP5VaRVe");
+  console.log("This is gameID", gameId);
+  // const outcomes = [
+  //   "Alonso",
+  //   "Albon",
+  //   "Bottas",
+  //   "Gasly",
+  //   "Hamilton",
+  //   "Hulkenberg",
+  //   "Magnussen",
+  //   "Norris",
+  //   "Perez",
+  //   "Piastri",
+  //   "Sainz",
+  //   "Sergio",
+  //   "Stroll",
+  //   "Tsunoda",
+  //   "Verstappen",
+  //   "Zhou",
+  // ];
+  // const results = [
+  //   new anchor.BN(14),
+  //   new anchor.BN(23),
+  //   new anchor.BN(77),
+  //   new anchor.BN(10),
+  //   new anchor.BN(44),
+  //   new anchor.BN(27),
+  //   new anchor.BN(20),
+  //   new anchor.BN(4),
+  //   new anchor.BN(11),
+  //   new anchor.BN(81),
+  //   new anchor.BN(55),
+  //   new anchor.BN(15),
+  //   new anchor.BN(18),
+  //   new anchor.BN(22),
+  //   new anchor.BN(1),
+  //   new anchor.BN(24),
+  // ];
+  const outcomes = ["India", "Australia"]
+  const results = [new anchor.BN(1), new anchor.BN(2)];
+  const feedKey = new PublicKey("GVmpRFXTV2NHxKsKF1w5FFEdnha6aSfXWUyEJukm7i3n");
   const initialMultiplier = 50;
+  // const realExpiryTimestamp = (new Date("06/04/2023 06:25:00 PM").getTime())/1000; 
   const currentTime = Date.now()/1000
-  const futureTime = currentTime + 4000;
+  const realExpiryTimestamp = currentTime + 100000;
+  // console.log("real expiry time", realExpiryTimestamp, Date.parse("06/04/2023 06:25:00 PM"), currentTime);
+  const futureTime = currentTime ;
   const expiryTime = currentTime + 10000;
 
   const getMarketStatePDA = gameId => {
@@ -360,10 +400,8 @@ describe("parimutuel-sports", () => {
     const {marketStatePDA, marketStateBump} = getMarketStatePDA(gameId);
     const {marketPoolPDA, marketPoolBump} = getMarketPoolPDA(gameId);
 
-
-    
     const tx = await program.methods
-      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(expiryTime), 1, initialMultiplier)
+      .createMarket(gameId, feedKey, outcomes, results, new anchor.BN(realExpiryTimestamp), 1, initialMultiplier)
       .accounts({
         creator: alice.publicKey,
         marketState: marketStatePDA,
@@ -373,6 +411,7 @@ describe("parimutuel-sports", () => {
         // switchboardAggregator: feedKey,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([alice])
@@ -391,8 +430,8 @@ describe("parimutuel-sports", () => {
     const {userStatePDA: adminStatePDA, userStateBump: adminStateBump} = getUserStatePDA(gameId, admin.publicKey);
 
 
-    const homeOutcome = "HOME";
-    const awayOutcome = "AWAY";
+    const homeOutcome = "India";
+    const awayOutcome = "Australia";
     const betAmount = 10000;
     try {
       // Alice bets on AWAY
@@ -407,13 +446,14 @@ describe("parimutuel-sports", () => {
         marketWallet: marketPoolPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([alice])
       .rpc();
-
+      console.log("THis is tx for alice", aliceTx);
       // bob bets on HOME 
-      const bobTx = await program.methods
+      const bobTx1 = await program.methods
       .bet(gameId, marketStateBump, homeOutcome, new anchor.BN(betAmount), new anchor.BN(futureTime))
       .accounts({
         bettor: bob.publicKey,
@@ -424,10 +464,28 @@ describe("parimutuel-sports", () => {
         marketWallet: marketPoolPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([bob])
       .rpc();
+
+      // const bobTx2 = await program.methods
+      // .bet(gameId, marketStateBump, awayOutcome, new anchor.BN(betAmount * 2), new anchor.BN(futureTime))
+      // .accounts({
+      //   bettor: bob.publicKey,
+      //   bettorTokenAccount: bobTokenAccount,
+      //   marketState: marketStatePDA,
+      //   userBetState: bobStatePDA,
+      //   tokenMint: USDCMint,
+      //   marketWallet: marketPoolPDA,
+      //   systemProgram: anchor.web3.SystemProgram.programId,
+      //   tokenProgram: spl.TOKEN_PROGRAM_ID,
+      //   associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
+      //   rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      // })
+      // .signers([bob])
+      // .rpc();
 
       // Cas bets on HOME
       const casTx = await program.methods
@@ -441,6 +499,7 @@ describe("parimutuel-sports", () => {
         marketWallet: marketPoolPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([cas])
@@ -458,6 +517,7 @@ describe("parimutuel-sports", () => {
         marketWallet: marketPoolPDA,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([admin])
@@ -481,6 +541,13 @@ describe("parimutuel-sports", () => {
     const betAmount = 10000;
     try {
       // Alice and Bob has won
+
+      const _bobTokenAccountBefore = await spl.getAccount(
+        provider.connection,
+        bobTokenAccount
+      );
+      console.log("Bob TOKEN Balance before: ", _bobTokenAccountBefore.amount);
+
       const bobTx = await program.methods
       .settle(gameId, marketStateBump)
       .accounts({
@@ -494,13 +561,26 @@ describe("parimutuel-sports", () => {
         creatorWallet: aliceTokenAccount,
         switchboardAggregator: feedKey,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([bob])
       .rpc();
 
+      const _bobTokenAccountAfter = await spl.getAccount(
+        provider.connection,
+        bobTokenAccount
+      );
+      console.log("bob TOKEN Balance After: ", _bobTokenAccountAfter.amount);
+      console.log("bob TOKEN difference: ", _bobTokenAccountAfter.amount - _bobTokenAccountBefore.amount);
 
-      console.log("This is tx for settle bob", bobTx);
+      // console.log("This is tx for settle bob", bobTx);
+
+      const _casTokenAccountBefore = await spl.getAccount(
+        provider.connection,
+        casTokenAccount
+      );
+      console.log("Cas TOKEN Balance before: ", _casTokenAccountBefore.amount);
 
       const casTx = await program.methods
       .settle(gameId, marketStateBump)
@@ -515,12 +595,19 @@ describe("parimutuel-sports", () => {
         creatorWallet: aliceTokenAccount,
         switchboardAggregator: feedKey,
         tokenProgram: spl.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: spl.ASSOCIATED_TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .signers([cas])
       .rpc();
 
-      console.log("This is tx for settle alice", casTx);
+      // console.log("This is tx for settle alice", casTx);
+      const _casTokenAccountAfter = await spl.getAccount(
+        provider.connection,
+        casTokenAccount
+      );
+      console.log("cas TOKEN Balance After: ", _casTokenAccountAfter.amount);
+      console.log("cas TOKEN difference: ", _casTokenAccountAfter.amount - _casTokenAccountBefore.amount);
     } catch (error) {
       console.log("this is error for settle", error);
     }
