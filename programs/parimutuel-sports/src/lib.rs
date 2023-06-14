@@ -12,9 +12,12 @@ declare_id!("BvnkwA2K3R41Hex1M56ck5BQktu7RBKLaEFqitiLNDHU");
 const MARKET_STATE_SEED: &'static [u8] = b"market_state";
 const MARKET_WALLET_SEED: &'static [u8] = b"market_wallet";
 const USER_STATE_SEED: &'static [u8] = b"user_state";
+const PLATFORM_WALLET_SEED: &'static [u8] = b"platform_wallet";
+const PLATFORM_STATE_SEED: &'static [u8] = b"platform_state";
 
 const PLATFORM_FEES: u8 = 1;
 const PLATFORM_WALLET: &str = "Ezn2vzUx19ph7vXw4YEK5WrTHSA5RccnVpn1nuWz5dEX";
+const PLATFORM_SOL_WALLET: &str = "FUMWGS2GkQcaUsYHCQVa41wxJCYMYf28yeox2joChmT4";
 
 pub fn calculate_multipler(mut multiplier: u32, minutes: u32) -> (u32, u32) {
     let mut iterations = 1;
@@ -433,6 +436,57 @@ pub mod parimutuel_sports {
 
         Ok(())
     }
+
+    pub fn get_token(ctx: Context<GetToken>, game_id: String, amount: u64, platform_bump: u8) -> Result<()> {
+        msg!("You could call this with amount {}", amount);
+        // 1000 * 10^6 tokens for 1 SOL
+
+        let sol_amount = amount/100;
+
+        if ctx.accounts.platform_sol_wallet.key() != Pubkey::from_str(PLATFORM_SOL_WALLET).unwrap() {
+            return Err(error!(ErrorCodes::InvalidPlatformWallet));
+        }
+
+        let first_ix = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.owner.key(),
+            &ctx.accounts.platform_sol_wallet.key(),
+            sol_amount,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &first_ix,
+            &[
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.platform_sol_wallet.to_account_info(),
+            ],
+        );
+
+        let bump_vector = platform_bump.to_le_bytes();
+            let inner = vec![
+                PLATFORM_STATE_SEED,
+                bump_vector.as_ref(),
+            ];
+        let outer = vec![inner.as_slice()];
+
+        let transfer_instruction = Transfer {
+            from: ctx.accounts.platform_wallet.to_account_info(),
+            to: ctx.accounts.owner_token_account.to_account_info(),
+            authority: ctx.accounts.platform_state.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+            outer.as_slice(), //signer PDA
+        );
+
+        anchor_spl::token::transfer(cpi_ctx, amount)?;
+
+        msg!("token transfer happened");
+
+
+
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -511,6 +565,34 @@ pub struct Settle<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[derive(Accounts)]
+#[instruction(game_id: String)]
+pub struct GetToken<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        associated_token::mint = token_mint, 
+        associated_token::authority = owner
+    )]
+    pub owner_token_account: Account<'info, TokenAccount>,
+    #[account(init_if_needed, payer = owner, seeds = [PLATFORM_STATE_SEED], bump, space = 10)]
+    pub platform_state: Account<'info, Platform>,
+    #[account(mut, seeds = [MARKET_STATE_SEED, game_id.as_bytes()[..18].as_ref(), game_id.as_bytes()[18..].as_ref()],bump, has_one = token_mint)]
+    pub market_state: Account<'info, Market>,
+    pub token_mint: Account<'info, Mint>,
+    #[account(init_if_needed, payer = owner, seeds = [PLATFORM_WALLET_SEED], bump, token::mint = token_mint, token::authority = platform_state)]
+    pub platform_wallet: Account<'info, TokenAccount>,
+    #[account(mut)]
+    /// CHECK:
+    pub platform_sol_wallet: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize, PartialEq)]
 pub struct Outcome {
     pub total_bets: u64,                // 8
@@ -547,6 +629,11 @@ pub struct Market {
 pub struct UserBet {
     pub bets: Vec<UserOutcome>,
     pub settled: bool,
+}
+
+#[account]
+pub struct Platform {
+    version: u8
 }
 
 #[error_code]
